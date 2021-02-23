@@ -15,11 +15,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.dong.container.R
+import com.dong.container.installAndLaunch
 import com.dong.container.model.add.LocalAppInfo
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 
 /**
  * Created by dongjiangpeng on 2021/2/22 0022.
@@ -67,6 +65,8 @@ class AddAppFragment : Fragment(){
 
     class AddAppAdapter:RecyclerView.Adapter<AddAppViewHolder>() {
 
+        private val TAG = "AddAppAdapter"
+
         var appList = emptyArray<LocalAppInfo>()
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AddAppViewHolder {
@@ -84,6 +84,7 @@ class AddAppFragment : Fragment(){
         }
 
         fun setData(appList: Array<LocalAppInfo>) {
+            Log.d(TAG, String.format("/setData:thread(%s)",Thread.currentThread().getName()));
             this.appList = appList
             notifyDataSetChanged()
         }
@@ -93,15 +94,24 @@ class AddAppFragment : Fragment(){
     class AddAppViewHolder(itemView:View): RecyclerView.ViewHolder(itemView) {
         val appIcon:ImageView
         val appName:TextView
+        val installText:TextView
 
         init {
             appIcon = itemView.findViewById<ImageView>(R.id.iv_app_icon)
             appName = itemView.findViewById<TextView>(R.id.tv_app_name)
+            installText = itemView.findViewById(R.id.tv_install)
         }
 
         fun setData(appInfo: LocalAppInfo) {
             Glide.with(itemView).load(appInfo.iconPath).into(appIcon)
             appName.text = appInfo.appName
+            installText.setOnClickListener({ view->
+                MainScope().launch {
+                    withContext(Dispatchers.IO) {
+                        installAndLaunch(itemView.context,appInfo)
+                    }
+                }
+            })
         }
     }
 

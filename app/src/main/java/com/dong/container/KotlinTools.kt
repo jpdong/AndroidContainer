@@ -1,11 +1,18 @@
 package com.dong.container
 
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.util.Log
+import com.dong.container.hook.AMSHookHelper
+import com.dong.container.hook.PluginPackageParser
+import com.dong.container.model.add.LocalAppInfo
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
@@ -15,6 +22,7 @@ import java.io.OutputStream
  */
 open class SingletonHolder<out T, in A>(creator: (A) -> T) {
     private var creator: ((A) -> T)? = creator
+
     @Volatile
     private var instance: T? = null
 
@@ -80,4 +88,40 @@ fun getBitmapFromDrawable(drawable: Drawable?): Bitmap? {
         drawable.draw(canvas)
     }
     return bmp
+}
+
+public val appParserMap = HashMap<String, PluginPackageParser>()
+public val stubPackageMap = HashMap<String, ComponentName>()
+private const val TAG = "KotlinTools"
+fun installAndLaunch(context: Context, localAppInfo: LocalAppInfo) {
+    Log.d(TAG, String.format("/installAndLaunch:thread(%s)", Thread.currentThread().getName()));
+    val packageName = localAppInfo.packageName;
+    var packageParser = appParserMap.get(packageName)
+    if (packageParser == null) {
+        packageParser = PluginPackageParser(App.getInstance(), File(localAppInfo.apkPath))
+        appParserMap.put(packageName, packageParser)
+    }
+
+
+    val componentName = packageParser.getLaunchComponent(packageName);
+    Log.d(TAG, String.format("/installAndLaunch:thread(%s) cn $componentName",Thread.currentThread().getName()));
+    val intent = Intent()
+    intent.setComponent(componentName)
+
+    val newIntent = Intent();
+
+    // 替身Activity的包名, 也就是我们自己的包名
+    val stubPackage = "com.dong.container";
+
+    // 这里我们把启动的Activity临时替换为 StubActivity
+    val componentNameStub = ComponentName(stubPackage, "com.dong.container.StubActivity");
+    newIntent.setComponent(componentNameStub);
+
+    // 把我们原始要启动的TargetActivity先存起来
+    newIntent.putExtra(AMSHookHelper.EXTRA_TARGET_INTENT, intent);
+    newIntent.putExtra(AMSHookHelper.EXTRA_TARGET_APKPATH,localAppInfo.apkPath)
+    newIntent.putExtra(AMSHookHelper.EXTRA_TARGET_PACKAGENAME,localAppInfo.packageName)
+
+    // 替换掉Intent, 达到欺骗AMS的目的
+    context.startActivity(newIntent)
 }

@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.ResolveInfo
+import android.os.Environment
+import android.util.Log
 import com.dong.container.SingletonHolder
 import com.dong.container.model.add.LocalAppInfo
 import com.dong.container.saveBitmapToFile
@@ -15,6 +17,8 @@ import java.io.File
  * Created by dongjiangpeng on 2021/2/22 0022.
  */
 class LocalAppRepository private constructor(var context: Context) {
+
+    private val TAG = "LocalAppRepository"
 
     companion object : SingletonHolder<LocalAppRepository, Context>(::LocalAppRepository)
 
@@ -53,6 +57,25 @@ class LocalAppRepository private constructor(var context: Context) {
                 result.add(LocalAppInfo(iconPath,pm.getApplicationLabel(applicationInfo).toString(), packageName,applicationInfo.sourceDir))
             }
         }
+        return result.toTypedArray()
+    }
+
+    fun getLocalApkList():Array<LocalAppInfo>{
+        val pm = context.packageManager
+        val result = ArrayList<LocalAppInfo>()
+        val storage = File(Environment.getExternalStorageDirectory().absolutePath)
+        val storageFiles = storage.listFiles();
+        Log.d(TAG, String.format("/getLocalApkList :thread(%s) storageFiles ${storageFiles.size}",Thread.currentThread().getName()));
+        if (storageFiles != null) {
+            storageFiles.forEach { file ->
+                if (file.absolutePath.endsWith(".apk")) {
+                    val packageInfo = pm.getPackageArchiveInfo(file.absolutePath,0);
+                    result.add(LocalAppInfo("",packageInfo.packageName, packageInfo.packageName,file.absolutePath))
+                }
+            }
+        }
+        Log.d(TAG, String.format("/getLocalApkList:thread(%s) size ${result.size}",Thread.currentThread().getName()));
+
         return result.toTypedArray()
     }
 

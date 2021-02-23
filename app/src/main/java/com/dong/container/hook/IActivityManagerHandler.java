@@ -27,7 +27,7 @@ import java.lang.reflect.Method;
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
 
-        if ("startActivity".equals(method.getName())) {
+        /*if ("startActivity".equals(method.getName())) {
             // 只拦截这个方法
             // 替换参数, 任你所为;甚至替换原始Activity启动别的Activity偷梁换柱
             // API 23:
@@ -53,7 +53,7 @@ import java.lang.reflect.Method;
             Intent newIntent = new Intent();
 
             // 替身Activity的包名, 也就是我们自己的包名
-            String stubPackage = "com.weishu.intercept_activity.app";
+            String stubPackage = "com.dong.container";
 
             // 这里我们把启动的Activity临时替换为 StubActivity
             ComponentName componentName = new ComponentName(stubPackage, StubActivity.class.getName());
@@ -64,11 +64,11 @@ import java.lang.reflect.Method;
 
             // 替换掉Intent, 达到欺骗AMS的目的
             args[index] = newIntent;
-
+            Log.d(TAG, String.format("IActivityManagerHandler/invoke:thread(%s)",Thread.currentThread().getName()));
             Log.d(TAG, "hook success");
             return method.invoke(mBase, args);
 
-        }
+        }*/
 
         return method.invoke(mBase, args);
     }

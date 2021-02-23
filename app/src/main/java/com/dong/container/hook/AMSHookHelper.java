@@ -14,6 +14,8 @@ import java.lang.reflect.Proxy;
 public class AMSHookHelper {
 
     public static final String EXTRA_TARGET_INTENT = "extra_target_intent";
+    public static final String EXTRA_TARGET_APKPATH = "extra_target_apk_path";
+    public static final String EXTRA_TARGET_PACKAGENAME = "extra_target_package_name";
 
     /**
      * Hook AMS

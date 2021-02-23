@@ -15,6 +15,7 @@ import android.util.Log;
 
 
 import com.dong.container.App;
+import com.dong.container.KotlinToolsKt;
 import com.dong.container.util.CommonUtil;
 
 import java.io.File;
@@ -54,20 +55,43 @@ import java.util.List;
 
     private void handleLaunchActivity(Message msg) {
         Log.d(TAG, String.format("ActivityThreadHandlerCallback/handleLaunchActivity:thread(%s) process(%s)", Thread.currentThread().getName(), CommonUtil.getProcessName()));
-        //fixContextPackageManager(App.getInstance());
-        PluginPackageParser parser = null;
+        Object obj = msg.obj;
+        Intent raw = null;
+        Intent target = null;
+        String apkPath = null;
+        String packageName = null;
         try {
-            //parser = new PluginPackageParser(App.getInstance(), new File("/data/anr/com.example.targetapp-1.apk"));
-            //parser = new PluginPackageParser(App.getInstance(), new File("/data/anr/targetapp-debug.apk"));
-            parser = new PluginPackageParser(App.getInstance(), new File(App.getInstance().getFilesDir().getAbsolutePath() + "/targetapp-debug.apk"));
+            Field intent = obj.getClass().getDeclaredField("intent");
+            intent.setAccessible(true);
+            raw = (Intent) intent.get(obj);
+            target = raw.getParcelableExtra(AMSHookHelper.EXTRA_TARGET_INTENT);
+            apkPath = raw.getStringExtra(AMSHookHelper.EXTRA_TARGET_APKPATH);
+            packageName = raw.getStringExtra(AMSHookHelper.EXTRA_TARGET_PACKAGENAME);
         } catch (Exception e) {
             e.printStackTrace();
         }
+
+        /*PluginPackageParser parser = null;
+        try {
+            parser = new PluginPackageParser(App.getInstance(), new File(App.getInstance().getFilesDir().getAbsolutePath() + "/targetapp-debug.apk"));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }*/
+        Log.d(TAG, String.format("ActivityThreadHandlerCallback/handleLaunchActivity:thread(%s) KotlinToolsKt.getAppParserMap()(%s) ",Thread.currentThread().getName(),KotlinToolsKt.getAppParserMap().size()));
+        PluginPackageParser parser = KotlinToolsKt.getAppParserMap().get(packageName);
+        if (parser == null) {
+            try {
+                parser = new PluginPackageParser(App.getInstance(), new File(apkPath));
+                KotlinToolsKt.getAppParserMap().put(packageName, parser);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        }
         // 这里简单起见,直接取出TargetActivity;
-//ActivityInfo activityInfo = parser.getActivityInfo(new ComponentName("com.example.targetapp","com.example.targetapp.TargetActivity"),0);
         ActivityInfo activityInfo = null;
         try {
-            activityInfo = parser.getActivityInfo(new ComponentName("com.example.targetapp", "com.example.targetapp.MainActivity"), 0);
+            activityInfo = parser.getActivityInfo(target.getComponent(), 0);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -84,7 +108,7 @@ import java.util.List;
         }catch (Exception e) {
             e.printStackTrace();
         }
-        Object obj = msg.obj;
+
         // 根据源码:
         // 这个对象是 ActivityClientRecord 类型
         // 我们修改它的intent字段为我们原来保存的即可.
@@ -100,11 +124,9 @@ import java.util.List;
 
         try {
             // 把替身恢复成真身
-            Field intent = obj.getClass().getDeclaredField("intent");
-            intent.setAccessible(true);
-            Intent raw = (Intent) intent.get(obj);
 
-            Intent target = raw.getParcelableExtra(AMSHookHelper.EXTRA_TARGET_INTENT);
+
+
             raw.setComponent(target.getComponent());
             setIntentClassLoader(raw, pluginClassLoader);
             setIntentClassLoader(target, pluginClassLoader);

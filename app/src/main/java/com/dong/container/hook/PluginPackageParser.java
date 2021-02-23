@@ -38,11 +38,13 @@ import android.os.Build;
 import android.text.TextUtils;
 
 import java.io.File;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -518,5 +520,31 @@ public class PluginPackageParser {
         if (signatures != null) {
             mParser.writeSignature(signatures);
         }
+    }
+
+    public ComponentName getLaunchComponent(String packageName) {
+        Set<Map.Entry<ComponentName,List<IntentFilter>>> entrySet = mActivityIntentFilterCache.entrySet();
+        for (Map.Entry<ComponentName, List<IntentFilter>> entry : entrySet) {
+            if (entry.getKey().getPackageName().equals(packageName)) {
+                for (IntentFilter intentFilter : entry.getValue()) {
+                    List<String> categoryList = null;
+                    try {
+                        Field categoryListField = IntentFilter.class.getDeclaredField("mCategories");
+                        categoryListField.setAccessible(true);
+                        categoryList = (List<String>) categoryListField.get(intentFilter);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    if (categoryList != null) {
+                        for (String c : categoryList) {
+                            if (c.contains("LAUNCHER")) {
+                                return entry.getKey();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 }
