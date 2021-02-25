@@ -14,6 +14,7 @@ import android.widget.Button;
 import com.dong.container.hook.AMSHookHelper;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 
 /**
  * @author weishu
@@ -43,7 +44,6 @@ public class MainActivity extends Activity {
 
         File file = new File("/sdcard/dong/targetapp-debug.apk");
         Log.d(TAG, String.format("StubActivity/onCreate:thread(%s) file(%s) exist(%s)",Thread.currentThread().getName(),file.getAbsolutePath(),file.exists()));
-
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -67,6 +67,5 @@ public class MainActivity extends Activity {
             }
         });
         setContentView(button);
-
     }
 }

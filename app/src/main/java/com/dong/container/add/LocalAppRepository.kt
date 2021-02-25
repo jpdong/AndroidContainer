@@ -22,7 +22,7 @@ class LocalAppRepository private constructor(var context: Context) {
 
     companion object : SingletonHolder<LocalAppRepository, Context>(::LocalAppRepository)
 
-    fun getLocalAppList():Array<LocalAppInfo>{
+    fun getLocalAppList(): Array<LocalAppInfo> {
         val pm = context.packageManager
         var appInfos: List<PackageInfo>? = null
         appInfos = try {
@@ -54,30 +54,51 @@ class LocalAppRepository private constructor(var context: Context) {
                 if (!iconFile.exists()) {
                     saveBitmapToFile(pm, applicationInfo, iconPath)
                 }
-                result.add(LocalAppInfo(iconPath,pm.getApplicationLabel(applicationInfo).toString(), packageName,applicationInfo.sourceDir))
+                result.add(LocalAppInfo(iconPath, pm.getApplicationLabel(applicationInfo).toString(), packageName, applicationInfo.sourceDir))
             }
         }
-        return result.toTypedArray()
+        return result.toTypedArray() + getLocalApkList()
     }
 
-    fun getLocalApkList():Array<LocalAppInfo>{
+    fun getLocalApkList(): Array<LocalAppInfo> {
         val pm = context.packageManager
         val result = ArrayList<LocalAppInfo>()
-        val storage = File(Environment.getExternalStorageDirectory().absolutePath)
-        val storageFiles = storage.listFiles();
-        Log.d(TAG, String.format("/getLocalApkList :thread(%s) storageFiles ${storageFiles.size}",Thread.currentThread().getName()));
-        if (storageFiles != null) {
-            storageFiles.forEach { file ->
-                if (file.absolutePath.endsWith(".apk")) {
-                    val packageInfo = pm.getPackageArchiveInfo(file.absolutePath,0);
-                    result.add(LocalAppInfo("",packageInfo.packageName, packageInfo.packageName,file.absolutePath))
-                }
+        val apkFilePaths = scanApkFile()
+        apkFilePaths?.forEach { apkPath ->
+            val packageInfo = pm.getPackageArchiveInfo(apkPath, 0);
+            val applicationInfo = packageInfo.applicationInfo
+            applicationInfo.sourceDir = apkPath
+            applicationInfo.publicSourceDir = apkPath
+            val packageName = packageInfo.packageName
+            val iconPath: String = "${context.filesDir}${File.separator}$packageName.png"
+            val iconFile = File(iconPath)
+            if (!iconFile.exists()) {
+                saveBitmapToFile(pm, applicationInfo, iconPath)
             }
+            result.add(LocalAppInfo(iconPath, pm.getApplicationLabel(applicationInfo).toString(), packageInfo.packageName, apkPath))
         }
-        Log.d(TAG, String.format("/getLocalApkList:thread(%s) size ${result.size}",Thread.currentThread().getName()));
 
+        Log.d(TAG, String.format("/getLocalApkList:thread(%s) size ${result.size}", Thread.currentThread().getName()));
         return result.toTypedArray()
     }
 
+    fun scanApkFile(): List<String> {
+        val result = ArrayList<String>()
+        scanApkInternal(Environment.getExternalStorageDirectory(), result)
+        return result
+    }
+
+    fun scanApkInternal(file: File, list: ArrayList<String>) {
+        if (file.isDirectory) {
+            val files = file.listFiles()
+            files?.forEach { item ->
+                scanApkInternal(item, list)
+            }
+        } else {
+            if (file.name.endsWith(".apk")) {
+                list.add(file.absolutePath)
+            }
+        }
+    }
 
 }

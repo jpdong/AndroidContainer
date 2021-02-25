@@ -1,7 +1,6 @@
 package com.dong.container.hook;
 
 import android.app.Application;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -11,8 +10,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.text.TextUtils;
 import android.util.Log;
-
 
 import com.dong.container.App;
 import com.dong.container.KotlinToolsKt;
@@ -22,7 +21,11 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author weishu
@@ -77,7 +80,7 @@ import java.util.List;
         } catch (Exception e) {
             e.printStackTrace();
         }*/
-        Log.d(TAG, String.format("ActivityThreadHandlerCallback/handleLaunchActivity:thread(%s) KotlinToolsKt.getAppParserMap()(%s) ",Thread.currentThread().getName(),KotlinToolsKt.getAppParserMap().size()));
+        Log.d(TAG, String.format("ActivityThreadHandlerCallback/handleLaunchActivity:thread(%s) KotlinToolsKt.getAppParserMap()(%s) ", Thread.currentThread().getName(), KotlinToolsKt.getAppParserMap().size()));
         PluginPackageParser parser = KotlinToolsKt.getAppParserMap().get(packageName);
         if (parser == null) {
             try {
@@ -97,7 +100,7 @@ import java.util.List;
         }
         Log.d(TAG, String.format("ActivityThreadHandlerCallback/handleLaunchActivity:thread(%s) activityInfo(%s)", Thread.currentThread().getName(), activityInfo));
         try {
-            preLoadApk(App.getInstance(), activityInfo);
+            preLoadApk(App.getInstance(), activityInfo, packageName, apkPath);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -105,10 +108,10 @@ import java.util.List;
         ClassLoader pluginClassLoader = null;
         try {
             pluginClassLoader = getPluginClassLoader();
-        }catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
-
+        Log.d(TAG, String.format("ActivityThreadHandlerCallback/handleLaunchActivity:thread(%s) pluginClassLoader(%s)", Thread.currentThread().getName(), pluginClassLoader));
         // 根据源码:
         // 这个对象是 ActivityClientRecord 类型
         // 我们修改它的intent字段为我们原来保存的即可.
@@ -124,7 +127,6 @@ import java.util.List;
 
         try {
             // 把替身恢复成真身
-
 
 
             raw.setComponent(target.getComponent());
@@ -148,12 +150,13 @@ import java.util.List;
                 FieldUtils.writeField(intent, "mExtras", value);
             }
         } catch (Exception e) {
+            e.printStackTrace();
         } finally {
             intent.setExtrasClassLoader(classLoader);
         }
     }
 
-    private ClassLoader getPluginClassLoader () throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+    private ClassLoader getPluginClassLoader() throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         Object at = ActivityThreadCompat.currentActivityThread();
         Object mAllApplications = FieldUtils.readField(at, "mAllApplications");
         if (mAllApplications instanceof List) {
@@ -182,7 +185,10 @@ import java.util.List;
         }
     }
 
-    public static void preLoadApk(Context hostContext, ComponentInfo pluginInfo) throws IOException, NoSuchMethodException, IllegalAccessException, InvocationTargetException, PackageManager.NameNotFoundException, ClassNotFoundException {
+    public static Map<String, Object> sLoadedApk = new HashMap<>();
+
+    public static void preLoadApk(Context hostContext, ComponentInfo pluginInfo, String packageName, String apkPath) throws IOException, NoSuchMethodException, IllegalAccessException, InvocationTargetException, PackageManager.NameNotFoundException, ClassNotFoundException {
+        Log.d(TAG, String.format("ActivityThreadHandlerCallback/preLoadApk:thread(%s)", Thread.currentThread().getName()));
         if (pluginInfo == null && hostContext == null) {
             return;
         }
@@ -191,6 +197,7 @@ import java.util.List;
 
         Object loadedApk = null;
         Object object = ActivityThreadCompat.currentActivityThread();
+        Log.d(TAG, String.format("ActivityThreadHandlerCallback/preLoadApk:thread(%s) currentActivityThread(%s)", Thread.currentThread().getName(), object));
         if (object != null) {
             Object mPackagesObj = FieldUtils.readField(object, "mPackages");
             Object containsKeyObj = MethodUtils.invokeMethod(mPackagesObj, "containsKey", pluginInfo.packageName);
@@ -201,24 +208,28 @@ import java.util.List;
                     loadedApk = MethodUtils.invokeMethod(object, "getPackageInfoNoCheck", pluginInfo.applicationInfo);
                 }
             }
+            sLoadedApk.put(pluginInfo.packageName, loadedApk);
         }
-        /*File apkFile = new File(hostContext.getFilesDir().getAbsolutePath() + "/targetapp-debug.apk");
-        //File apkFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/Download/targetapp-debug.apk");
+        try {
+            hookPackageManager();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        File apkFile = new File(apkPath);
         if (!apkFile.exists()) {
-            Log.e(TAG, String.format("App/installTargetDex:thread(%s) apkFile(%s) not exist",Thread.currentThread().getName(),apkFile.getAbsolutePath()));
+            Log.e(TAG, String.format("App/installTargetDex:thread(%s) apkFile(%s) not exist", Thread.currentThread().getName(), apkFile.getAbsolutePath()));
             return;
         }
-        File dexDir = new File(hostContext.getFilesDir().getAbsolutePath() + "/dex/");
+        File dexDir = new File(hostContext.getFilesDir().getAbsolutePath() + File.separator + "container" + File.separator + packageName + File.separator + "/dex/");
         if (!dexDir.exists()) {
-            dexDir.mkdir();
+            dexDir.mkdirs();
+
         }
-        File libDir = new File(hostContext.getFilesDir().getAbsolutePath() + "/dex/lib");
+        File libDir = new File(hostContext.getFilesDir().getAbsolutePath() + File.separator + "container" + File.separator + packageName + File.separator + "/dex/lib");
         if (!libDir.exists()) {
-            libDir.mkdir();
+            libDir.mkdirs();
         }
-        //String optimizedDirectory = PluginDirHelper.getPluginDalvikCacheDir(hostContext, pluginInfo.packageName);
         String optimizedDirectory = dexDir.getAbsolutePath();
-        //String libraryPath = PluginDirHelper.getPluginNativeLibraryDir(hostContext, pluginInfo.packageName);
         String libraryPath = libDir.getAbsolutePath();
         String apk = pluginInfo.applicationInfo.publicSourceDir;
         if (TextUtils.isEmpty(apk)) {
@@ -231,7 +242,7 @@ import java.util.List;
                 classloader = new PluginClassLoader(apk, optimizedDirectory, libraryPath, hostContext.getClassLoader().getParent());
             } catch (Exception e) {
             }
-            if(classloader==null){
+            if (classloader == null) {
                 PluginDirHelper.cleanOptimizedDirectory(optimizedDirectory);
                 classloader = new PluginClassLoader(apk, optimizedDirectory, libraryPath, hostContext.getClassLoader().getParent());
             }
@@ -239,10 +250,8 @@ import java.util.List;
                 FieldUtils.writeDeclaredField(loadedApk, "mClassLoader", classloader);
             }
             Thread.currentThread().setContextClassLoader(classloader);
-        }*/
-        synchronized (loadedApk) {
-            FieldUtils.writeDeclaredField(loadedApk, "mClassLoader", App.getInstance().getClassLoader());
         }
+        Log.d(TAG, String.format("ActivityThreadHandlerCallback/preLoadApk:thread(%s) loadedApk(%s)", Thread.currentThread().getName(), loadedApk));
         if (loadedApk != null) {
             Object mApplication = FieldUtils.readField(loadedApk, "mApplication");
             if (mApplication != null) {
@@ -252,5 +261,30 @@ import java.util.List;
 
         }
 
+    }
+
+    private static void hookPackageManager() throws Exception {
+
+        // 这一步是因为 initializeJavaContextClassLoader 这个方法内部无意中检查了这个包是否在系统安装
+        // 如果没有安装, 直接抛出异常, 这里需要临时Hook掉 PMS, 绕过这个检查.
+
+        Class<?> activityThreadClass = Class.forName("android.app.ActivityThread");
+        Method currentActivityThreadMethod = activityThreadClass.getDeclaredMethod("currentActivityThread");
+        currentActivityThreadMethod.setAccessible(true);
+        Object currentActivityThread = currentActivityThreadMethod.invoke(null);
+
+        // 获取ActivityThread里面原始的 sPackageManager
+        Field sPackageManagerField = activityThreadClass.getDeclaredField("sPackageManager");
+        sPackageManagerField.setAccessible(true);
+        Object sPackageManager = sPackageManagerField.get(currentActivityThread);
+
+        // 准备好代理对象, 用来替换原始的对象
+        Class<?> iPackageManagerInterface = Class.forName("android.content.pm.IPackageManager");
+        Object proxy = Proxy.newProxyInstance(iPackageManagerInterface.getClassLoader(),
+                new Class<?>[]{iPackageManagerInterface},
+                new IPackageManagerHookHandler(sPackageManager));
+
+        // 1. 替换掉ActivityThread里面的 sPackageManager 字段
+        sPackageManagerField.set(currentActivityThread, proxy);
     }
 }

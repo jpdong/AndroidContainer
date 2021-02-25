@@ -103,7 +103,7 @@ class AddAppFragment : Fragment(){
         }
 
         fun setData(appInfo: LocalAppInfo) {
-            Glide.with(itemView).load(appInfo.iconPath).into(appIcon)
+            Glide.with(itemView.context).load(appInfo.iconPath).into(appIcon)
             appName.text = appInfo.appName
             installText.setOnClickListener({ view->
                 MainScope().launch {

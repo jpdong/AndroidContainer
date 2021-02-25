@@ -17,7 +17,7 @@ class AddAppViewModel(application: Application):AndroidViewModel(application) {
     suspend fun getLocalAppList(): Array<LocalAppInfo> {
         Log.d(TAG, String.format("/:thread(%s)",Thread.currentThread().getName()));
         return withContext(Dispatchers.IO) {
-                return@withContext LocalAppRepository.getInstance(getApplication()).getLocalApkList()
+                return@withContext LocalAppRepository.getInstance(getApplication()).getLocalAppList()
         }
     }
 
